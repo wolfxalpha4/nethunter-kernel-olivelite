@@ -18,9 +18,13 @@ supported.versions=14, 14.0
 
 ### AnyKernel setup
 # global attributes
+BLOCK=boot;
 block=boot;
+IS_SLOT_DEVICE=0;
 is_slot_device=0;
+RAMDISK_COMPRESSION=auto;
 ramdisk_compression=auto;
+PATCH_VBMETA_FLAG=auto;
 patch_vbmeta_flag=auto;
 
 ## AnyKernel methods (DO NOT CHANGE)
