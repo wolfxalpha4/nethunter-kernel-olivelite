@@ -1,0 +1,145 @@
+name: Build NetHunter Kernel - Redmi 8A (olivelite)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build NetHunter Kernel
+    runs-on: ubuntu-22.04
+
+    env:
+      KERNEL_REPO: https://github.com/LineageOS/android_kernel_xiaomi_msm8937
+      KERNEL_BRANCH: lineage-21
+      DEVICE_CODENAME: olivelite
+      TARGET_ARCH: arm64
+      AOSP_CLANG_TAG: android-14.0.0_r1
+      AOSP_CLANG_VERSION: clang-r487747c
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 2048
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
+            git gnupg gperf libelf-dev libncurses5-dev libssl-dev lz4 \
+            zlib1g-dev python3 python2 libxml2-utils zip \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
+
+      - name: Download AOSP Clang Toolchain (${{ env.AOSP_CLANG_VERSION }})
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/clang
+          echo "Downloading Android 14 Clang r487747c..."
+          curl -sSL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/${{ env.AOSP_CLANG_TAG }}/${{ env.AOSP_CLANG_VERSION }}.tar.gz" | tar -xz -C $GITHUB_WORKSPACE/clang
+
+      - name: Clone Kernel Source
+        run: |
+          echo "Cloning LineageOS 21 (Android 14) kernel source for Mi439..."
+          git clone --depth=1 ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} $GITHUB_WORKSPACE/kernel
+
+      - name: Apply NetHunter Wireless & Driver Patches
+        run: |
+          cd $GITHUB_WORKSPACE/kernel
+
+          echo "Applying mac80211 packet injection patch..."
+          curl -sL "https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-kernel-builder/-/raw/main/patches/4.19/add-wifi-injection-4.19.patch" | patch -p1 || true
+
+          echo "Applying ath9k naming conflict fix..."
+          curl -sL "https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-kernel-builder/-/raw/main/patches/4.19/fix-ath9k-naming-conflict.patch" | patch -p1 || true
+
+          echo "Applying RTL88XXAU driver patch..."
+          curl -sL "https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-kernel-builder/-/raw/main/patches/4.14/add-rtl88xxau-5.6.4.2-drivers.patch" | patch -p1 || true
+
+      - name: Configure Kernel
+        run: |
+          cd $GITHUB_WORKSPACE/kernel
+          mkdir -p out
+
+          echo "Merging stock crDroid/Lineage configs with NetHunter config..."
+          ARCH=arm64 ./scripts/kconfig/merge_config.sh -m -O out \
+            arch/arm64/configs/vendor/msm8937-perf_defconfig \
+            arch/arm64/configs/vendor/common.config \
+            arch/arm64/configs/vendor/debugfs.config \
+            arch/arm64/configs/vendor/feature/android-12.config \
+            arch/arm64/configs/vendor/feature/erofs.config \
+            arch/arm64/configs/vendor/feature/lmkd.config \
+            arch/arm64/configs/vendor/xiaomi/sdm439/mi439.config \
+            arch/arm64/configs/vendor/msm-clk.config \
+            arch/arm64/configs/vendor/feature/lineageos.config \
+            $GITHUB_WORKSPACE/nethunter.config
+
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          make O=out ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            olddefconfig
+
+      - name: Compile Kernel Image
+        run: |
+          cd $GITHUB_WORKSPACE/kernel
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+
+          make -j$(nproc --all) O=out \
+            ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            Image.gz-dtb dtbo.img || \
+          make -j$(nproc --all) O=out \
+            ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            Image.gz-dtb
+
+      - name: Package AnyKernel3 Flashable ZIP
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git $GITHUB_WORKSPACE/AnyKernel3
+          cd $GITHUB_WORKSPACE/AnyKernel3
+
+          # Replace anykernel.sh with our pre-configured olivelite script
+          cp $GITHUB_WORKSPACE/anykernel.sh ./anykernel.sh
+
+          # Copy Image.gz-dtb
+          if [ -f $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image.gz-dtb zImage
+          elif [ -f $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image.gz ]; then
+            cp $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/Image.gz zImage
+          fi
+
+          # Copy DTBO if built
+          if [ -f $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/dtbo.img ]; then
+            cp $GITHUB_WORKSPACE/kernel/out/arch/arm64/boot/dtbo.img dtbo.img
+          fi
+
+          # Create flashable zip
+          zip -r9 NetHunter-Kernel-${{ env.DEVICE_CODENAME }}-crDroid14.zip * -x .git README.md *placeholder
+          mkdir -p $GITHUB_WORKSPACE/dist
+          cp NetHunter-Kernel-${{ env.DEVICE_CODENAME }}-crDroid14.zip $GITHUB_WORKSPACE/dist/
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetHunter-Kernel-${{ env.DEVICE_CODENAME }}-crDroid14
+          path: $GITHUB_WORKSPACE/dist/NetHunter-Kernel-${{ env.DEVICE_CODENAME }}-crDroid14.zip
+          retention-days: 7
