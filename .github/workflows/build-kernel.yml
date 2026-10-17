@@ -36,9 +36,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
+            bc bison build-essential ccache curl flex \
             git gnupg gperf libelf-dev libncurses5-dev libssl-dev lz4 \
-            zlib1g-dev python3 python2 libxml2-utils zip \
+            zlib1g-dev python3 libxml2-utils zip \
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
 
