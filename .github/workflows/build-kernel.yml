@@ -132,5 +132,21 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NetHunter-Kernel-${{ env.DEVICE_CODENAME }}-crDroid14
-          path: $GITHUB_WORKSPACE/dist/NetHunter-Kernel-${{ env.DEVICE_CODENAME }}-crDroid14.zip
+          path: dist/NetHunter-Kernel-*.zip
           retention-days: 7
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0-${{ github.run_number }}
+          name: NetHunter Kernel for Redmi 8A (olivelite) - Build #${{ github.run_number }}
+          body: |
+            ## NetHunter Kernel for Redmi 8A (olivelite / Mi439)
+            - **ROM**: crDroid 10.x (Android 14)
+            - **Kernel Version**: Linux 4.19.y
+            - **Features**:
+              - Packet injection (mac80211 patch)
+              - External USB Wi-Fi drivers (Atheros ath9k_htc, Ralink rt2800usb, Realtek rtl8187, rtl88xxau)
+              - USB HID Gadget attack support
+            - **Flash via**: TWRP, OrangeFox, or SHRP recovery.
+          files: dist/NetHunter-Kernel-*.zip
