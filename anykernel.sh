@@ -18,7 +18,7 @@ supported.versions=14, 14.0
 
 ### AnyKernel setup
 # global attributes
-block=/dev/block/bootdevice/by-name/boot;
+block=boot;
 is_slot_device=0;
 ramdisk_compression=auto;
 patch_vbmeta_flag=auto;
