@@ -60,11 +60,8 @@ jobs:
           echo "Applying RTL88XXAU driver patch..."
           curl -sL "https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-kernel-builder/-/raw/main/patches/4.14/add-rtl88xxau-5.6.4.2-drivers.patch" | patch -p1 || true
 
-          echo "Fixing symbol collisions for monolithic kernel build..."
-          find drivers/net/wireless/realtek/rtl8812au -type f -exec sed -i 's/\bis_space\b/rtw_is_space/g' {} + 2>/dev/null || true
-          sed -i 's/int is_space(/static int is_space(/g' techpack/xiaomi-sdm439/touchscreen/gt1511q/gt1x_test.c 2>/dev/null || true
-          sed -i 's/int is_digit(/static int is_digit(/g' techpack/xiaomi-sdm439/touchscreen/gt1511q/gt1x_test.c 2>/dev/null || true
-          sed -i 's/long atof(/static long atof(/g' techpack/xiaomi-sdm439/touchscreen/gt1511q/gt1x_test.c 2>/dev/null || true
+          echo "Fixing symbol collisions in RTL8812AU..."
+          find drivers/net/wireless/realtek/rtl8812au -type f -exec sed -i 's/\bis_space\b/rtw_is_space/g' {} +
 
       - name: Configure Kernel
         run: |
@@ -97,13 +94,6 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
 
-          make -j$(nproc --all) O=out \
-            ARCH=arm64 \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            Image.gz-dtb dtbo.img || \
           make -j$(nproc --all) O=out \
             ARCH=arm64 \
             CC=clang \
