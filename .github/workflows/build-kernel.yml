@@ -19,6 +19,9 @@ jobs:
       AOSP_CLANG_TAG: android-14.0.0_r1
       AOSP_CLANG_VERSION: clang-r487747c
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -56,6 +59,12 @@ jobs:
 
           echo "Applying RTL88XXAU driver patch..."
           curl -sL "https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-kernel-builder/-/raw/main/patches/4.14/add-rtl88xxau-5.6.4.2-drivers.patch" | patch -p1 || true
+
+          echo "Fixing symbol collisions for monolithic kernel build..."
+          find drivers/net/wireless/realtek/rtl8812au -type f -exec sed -i 's/\bis_space\b/rtw_is_space/g' {} + 2>/dev/null || true
+          sed -i 's/int is_space(/static int is_space(/g' techpack/xiaomi-sdm439/touchscreen/gt1511q/gt1x_test.c 2>/dev/null || true
+          sed -i 's/int is_digit(/static int is_digit(/g' techpack/xiaomi-sdm439/touchscreen/gt1511q/gt1x_test.c 2>/dev/null || true
+          sed -i 's/long atof(/static long atof(/g' techpack/xiaomi-sdm439/touchscreen/gt1511q/gt1x_test.c 2>/dev/null || true
 
       - name: Configure Kernel
         run: |
